@@ -1,0 +1,456 @@
+---
+title: "Selecting Stimuli from the USF Word Association Norms"
+author: "William Hopper"
+date: "October 20, 2016"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+---
+<style>
+
+body {
+ font-size: 16px;
+}
+
+h4 {
+  margin-top: 20px;
+}
+
+table {
+  max-width: 30% !important;
+  margin: 20px auto !important;
+}
+
+
+.btn {
+  display: block;
+  margin: 5px auto;
+  float: none !important;
+}
+
+tr.odd {
+  background-color: #f7f7f7;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DT)
+library(dplyr)
+library(stringr)
+library(magrittr)
+```
+
+## The USF Word Association Norms
+
+The Word Association Norms data has 4 variables:
+
+- **Cue**: The word given as a cue
+- **Response**: The word given in response to the cue
+- **Forward Association**: proportion of people who gave this response word
+- **Backwards Association**: proportion of people that when given the response word as cue, responded with the cue word
+
+After reading in the data, transform the character columns ("*cue*" and "*reponse*") into lower case words (to make it easier to match them with the output from the English Lexicon Project).
+Then, filter out any cue/response words with non alphabetical characters
+
+```{r reading_data}
+norms <- read.csv("~/Documents/Stimuli/norms.csv",
+                  header = FALSE,
+                  col.names = c("cue", "response", "forward_association", "backwards_association")) %>%
+  mutate_if(.predicate = is.character, .funs = tolower) %>% 
+  filter(grepl("^[a-z]+$", response) & grepl("^[a-z]+$", cue))
+
+```
+
+
+## Length And Word Frequency Data
+First, query the English Lexicon Project database to get SUBTLEX word frequencies, lengths, and POS of 
+the unique words in the USF norms. Clean up the query results by removing the "Occurrences"" columns (because all occurrences are 1) and lower-casing the column names (for easier joining with `norms` data frame). Finally, keep only words with 4 to 10 letters, and a word frequency between 5 and 200 uses per million words.
+
+```{r word_frequency}
+
+# writeLines(unique(c(norms$cue,norms$response)),
+#            con = "USF_association_unique_words.txt")
+# Query English Lexicon Project with responses.txt, get back SUBTLEX WF, length and POS.
+
+WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
+               header = TRUE,
+               na.strings = "NULL") %>%
+  select(-Occurences) %>%
+  rename(word = Word, length = Length) %>%
+  filter((length >= 4 & length <= 10) & (SUBTLWF >= 5 & SUBTLWF <= 200))
+```
+
+## Filtering the Word Association Norms
+
+#### Selecting the strongest cues
+1. Join the norms and word frequency data together, keeping only cue-response pairs where the response words meet the length and WF constraints. 
+2. Only include responses which have at least 3 cues with forward associations of at least .1
+3. For each unique cue word, select the response with the highest forward association.
+4. For each unique response, select the top 5 cue words (i.e., keep the top 5 forward associates to each response).
+
+```{r strongest_cues}
+
+filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
+  filter(forward_association > .1) %>%
+  group_by(response) %>%
+  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
+  group_by(cue) %>%
+  top_n(1, forward_association) %>% # Select the strongest associate to each cue
+  slice(1) %>% # gets rid of possible ties from top_n
+  group_by(response) %>%
+  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
+  top_n(5, forward_association) %>%
+  arrange(response, forward_association) %>%
+  filter(!cue %in% c("slave"))
+
+```
+
+```{r, echo=FALSE}
+# Sanity Checks 
+# Make sure the number of unique cues equals the number of rows in the table
+# This is a check to make sure all the cue words are unique
+stopifnot(length(unique(filtered_norms$cue)) == nrow(filtered_norms))
+```
+
+#### Removing overlaps between cues and reponses
+
+If a word is to be used as a target response, it is undesirable for that word to
+also be used a semantic cue to another target response, because it confounds
+exposure between items.
+
+To decide whether a particular word should be used as a target response, or as a cue, we compare the mean forward associative strength between the two following sets of items:
+
+1. The set of cue-response pairs where the response elicited by the word appears
+2. The set of cue-response pairs where the word appears as a response
+
+To give an example, consider the following hypothetical table of cues and responses,
+where the word "cat" appears as both a cue and a target.
+
+
+| Cue    | Target | Forward Association |
+|:------:|:------:|:---:|
+| Cat    | Dog    | .75  |
+| Fetch  | Dog    | .25 |
+| Meow   | Cat    | .9 |
+| Mouse  | Cat    | .2  | 
+
+To decide whether or not "cat" should be used as a cue or a target, we compare the mean of the forward associative strength for the set [Cat - Dog, Fetch-Dog] (which is 0.5) to the mean of the forward associative strength for the set [Meow-Cat, Mouse-Cat] (which is .55). The mean forward associative strength for the set [Meow-Cat, Mouse-Cat] is largest, thus we would decide to keep"cat" in the set as a target response.
+
+```{r cue_target_overlaps}
+
+overlap <- intersect(filtered_norms$cue,filtered_norms$response)
+if (length(overlap) != 0) {
+  
+  remove_rows <- vector(mode="list", length = length(overlap))
+  iteration <- 1
+  while (length(overlap) > 0) {
+    
+    w <- overlap[1] # the cue word
+    r <- filtered_norms$cue == w # which rows contain the overlapping cue 
+    target <- filtered_norms$response[r][1] # what target does the overlapping cue elicit
+    x <- filtered_norms$response == target # what rows contain the elicited target
+    y <- filtered_norms$response == w # what rows contain the cue word as a response
+    
+    
+    if (mean(filtered_norms$forward_association[x]) > mean(filtered_norms$forward_association[y])) {
+      remove <- y
+    } else {
+      remove <- x
+    }
+  
+    # Remove any words slated to be removed from the set of overlapping words.
+    overlap <- overlap[!overlap %in% c(w, filtered_norms$cue[remove],
+                                       filtered_norms$response[remove])]
+    # Record which rows of filtered_norms are to be removed
+    remove_rows[[iteration]] <- which(remove)
+    # Increast the counter that records how many iterations of the while loop 
+    # have taken place and indexes the remove_rows list 
+    iteration <- iteration + 1
+  }
+  
+  filtered_norms <- filtered_norms[-(unlist(remove_rows)), ]
+}
+# Make sure that there is no overlap between the cue words and response words
+stopifnot(length(intersect(filtered_norms$cue,filtered_norms$response))==0)
+```
+
+#### Removing pluralizations
+
+Many words in the set appear in both plural and singular form (e.g., peanut and peanut*s*, drug and drug*s*, etc.). To avoid confusion between the two forms, we will select only one form for use in the final stimuli set.
+
+Just as in the case of deciding between duplicate words, we will compare the mean forward associative strength between the set of cue-response pairs where the response elicited by the word appears, and the set of cue-response pairs where the word appears as a response.
+
+```{r remove_plurals}
+# Finds words that differ by a specified suffix within a vector
+# Reports the  minimal form of the words which are detected to have
+# multiple forms in the vector.
+
+find_suffixed <- function(words, suffix) {
+
+  stopifnot(is.character(words) && is.character(suffix) && length(suffix)==1)
+  
+  # Does a word end with the specified suffix?
+  suffix_length <- nchar(suffix)
+  ends_with <- str_sub(words, -suffix_length, -1) == suffix
+  
+  # Words that don't end with the suffix
+  simple_words <- words[!ends_with]
+  
+  # Which words have another form in the vector, ending with the suffix
+  multiform <- unique(simple_words[simple_words %in% str_sub(words[ends_with],
+                                                       1,
+                                                       -suffix_length-1)]
+                      )
+  multiform
+}
+
+# Removes pluralizations within a column
+remove_plurals <- function(data, variable) {
+  
+
+  multiform <- find_suffixed(data[[variable]], "s")
+  
+  if (length(multiform) == 0) {
+    return(data)
+  } else {
+    remove_rows <- vector(mode="list", length = length(multiform))
+  }
+
+  iteration <- 1
+  while (length(multiform) > 0) {
+    
+    w <- multiform[1] # The multiform cue word
+    singular_rows <- data[[variable]] == w # which rows contain the singular form
+    plural_rows <- data[[variable]] == paste0(w, "s") # which rows contain the plural form
+    # Mean of the top 3 forward associative strengths
+    singular_strength <- mean(data$forward_association[singular_rows][1:min(3,sum(singular_rows))])
+    plural_strength <- mean(data$forward_association[plural_rows][1:min(3,sum(plural_rows))])
+    
+    if (singular_strength < plural_strength) {
+      remove <- singular_rows
+    } else {
+      remove <- plural_rows
+    }
+  
+    # Remove any words slated to be removed from the set of overlapping words.
+    multiform <- multiform[!multiform %in% c(w, data[[variable]][remove])]
+    #  str_sub(data[remove,variable],1,-2))
+    
+    # Record which rows of filtered_norms are to be removed
+    remove_rows[[iteration]] <- which(remove)
+    # Increast the counter that records how many iterations of the while loop 
+    # have taken place and indexes the remove_rows list 
+    iteration <- iteration + 1
+  }
+  
+  data <- data[-(unlist(remove_rows)), ]
+  return(data)
+}
+
+filtered_norms <- filtered_norms %>%
+  remove_plurals("cue") %>%
+  group_by(response) %>%
+  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
+  ungroup() %>%
+  remove_plurals("response")
+
+#### Remove plurizations across both cue and response columns #####
+
+# Responses that do and don't end with "s"?
+resp_ends_s <- str_sub(filtered_norms$response, -1) == "s"
+singular_responses <- filtered_norms$response[!resp_ends_s]
+plural_responses <- filtered_norms$response[resp_ends_s]
+
+# Cues that do and don't end with "s"?
+cue_ends_s <- str_sub(filtered_norms$cue, -1) == "s"
+singular_cues <- filtered_norms$cue[!cue_ends_s]
+plural_cues <- filtered_norms$cue[cue_ends_s]
+
+# What singular form responses appear in plural form as cue
+multiform_resp <- unique(singular_responses[singular_responses %in% str_sub(plural_cues,1,-2)])
+# What singular form cues appear in plural form as response
+multiform_cue <- unique(singular_cues[singular_cues %in% str_sub(plural_responses,1,-2)])
+
+all_multiform <- c(multiform_resp, multiform_cue)
+
+if (length(all_multiform) != 0) {
+  
+  remove_rows <- vector(mode="list", length = length(all_multiform))
+  iteration <- 1
+  while (length(all_multiform) > 0) {
+    
+    w <- all_multiform[1] # The multiform cue word
+    w_plural <- paste0(w, "s")
+    # which rows contain the singular form
+    singular_rows <- Reduce(`|`,
+                            lapply(filtered_norms[,c("cue","response")],
+                                   `==`,
+                                   w)
+                            )
+    # which rows contain the plural form
+    plural_rows <- Reduce(`|`,
+                           lapply(filtered_norms[,c("cue","response")],
+                                  `==`,
+                                  w_plural)
+                          )
+    if (w %in% filtered_norms$response[plural_rows] & sum(singular_rows) == 1) {
+      singular_rows <- filtered_norms$response == filtered_norms$response[singular_rows]
+      
+    } else if (w %in% filtered_norms$response[singular_rows] & sum(plural_rows) == 1) {
+      plural_rows <- filtered_norms$response == filtered_norms$response[plural_rows]
+    }
+      
+    singular_strength <- mean(filtered_norms$forward_association[singular_rows][1:min(3, sum(singular_rows))])
+    plural_strength <- mean(filtered_norms$forward_association[plural_rows][1:min(3, sum(plural_rows))])
+    
+    if (singular_strength < plural_strength) {
+      remove <- singular_rows
+    } else {
+      remove <- plural_rows
+    }
+  
+    # Remove any words slated to be removed from the set of overlapping words.
+    all_multiform <- all_multiform[!all_multiform %in% c(w,filtered_norms$cue[remove],
+                                                         filtered_norms$response[remove])]
+
+    # Record which rows of filtered_norms are to be removed
+    remove_rows[[iteration]] <- which(remove)
+    # Increast the counter that records how many iterations of the while loop 
+    # have taken place and indexes the remove_rows list 
+    iteration <- iteration + 1
+  }
+  
+  filtered_norms <- filtered_norms[-(unlist(remove_rows)), ]
+}
+```
+
+#### Top *N* Cues
+
+Select the top 3 cues to each associate to finalize the stimuli set.
+```{r top_n_cues}
+filtered_norms <- filtered_norms %>%
+  group_by(response) %>%
+  top_n(3, forward_association) %>%
+  slice(1:3) %>%
+  ungroup()
+```
+
+Finally, remove some words for being a different part of speech as another word in the set.
+This removal list was generated by manual inspection.
+```{r similarity}
+remove_responses <- c("angry", "build", "choose", "fishing", "honesty",
+                      "marry", "scared")
+filtered_norms <- filtered_norms[!filtered_norms$response %in% remove_responses, ]
+
+n_unique_targets <- length(unique(filtered_norms$response))
+```
+
+## The Final Stimuli Set
+
+The procedure outlined above yields a set of semantically associated word pairs where:
+
+1. All response words have a word frequency between `r min(filtered_norms$SUBTLWF)` and `r max(filtered_norms$SUBTLWF)` uses per million words
+2. All response words are between `r min(filtered_norms$length)` and `r max(filtered_norms$length)` letters long
+3. Each cue has a minimum forward association of 0.1.
+4. Each cue word is unique (i.e., each cue appears with only 1 target response)
+5. No cue words are also target words, and vice versa (i.e., there is no intersection between cues and responses)
+6. Words use either their plural and singular form, never both
+7. There are at least 3 cues for each response
+8. Those cues have the strongest possible forward associates to their targets, given the above constraints
+
+- Number of unique target responses: <b> `r n_unique_targets` </b>
+
+```{r association_stregnth_distribution, echo=FALSE, fig.width=10}
+par(mfrow = c(1,2))
+hist(filtered_norms$forward_association, main = "Associative Strength Distribution",
+     xlab = "Forward Strengths", breaks = seq(0,1,by = .1))
+hist(filtered_norms$SUBTLWF, main = "Target Word Frequency Distribution",
+     xlab = "SUBTLX Word Frequency", breaks = 20)
+```
+
+#### The Semantically Associated Stimulus Set
+```{r show_filtered_stimulus_set, echo=FALSE}
+datatable(filtered_norms,
+          extensions = 'Buttons',
+          options = list(pageLength = nrow(filtered_norms),
+                         lengthMenu = c(25, 50, 100, 200, nrow(filtered_norms)),
+                         dom = 'Bfrtip',
+                         buttons = c('print','csv')),
+          class = 'cell-border stripe')
+```
+
+
+## The Episodic Cues
+
+To build the set of cues which will be episodically associated with the target words during the initial study phase, we begin again with the full set of cue words from the USF Norms, and pare them down according to the following procedure:
+
+1. Remove any cue-response pairs where the **cue** word appears in the final set of semantically associated pairs (i.e., in the table above).
+2.  Remove any cue-target pairs where the **response** word appears in the final set of semantically associated pairs
+3. Remove the plural form of any cue words where both the singular and plural form appear as cues
+4. Keep only cue words with 4 to 10 letters, and a word frequency between 5 and 200 (to match their properties to the target words properties)
+6. Keep only nouns
+5. Select the weakest `r n_unique_targets` cue words
+
+```{r episodic_cues}
+targets_and_semantic_cues <- c(filtered_norms$cue, filtered_norms$response)
+episodic_cues <- norms %>%
+  filter(!(cue %in% targets_and_semantic_cues | response %in% targets_and_semantic_cues)) %>%
+  filter(!cue %in% paste0(find_suffixed(cue,"s"),"s")) %>%
+  inner_join(WF, by = c("cue"="word")) %>%
+  filter(grepl("^NN$", POS)) %>%
+  group_by(cue) %>%
+  top_n(-1,forward_association) %>%
+  slice(1) %>%
+  ungroup() %>%
+  arrange(forward_association) %>%
+  slice(1:n_unique_targets)
+
+```
+
+The words selected for use as episodic cues and their properties are shown below.
+
+```{r show_episodic_cues, echo=FALSE}
+datatable(episodic_cues,
+          extensions = 'Buttons',
+          options = list(pageLength = nrow(filtered_norms),
+                         lengthMenu = c(25, 50, 100, 200, nrow(episodic_cues)),
+                         dom = 'Bfrtip',
+                         buttons = c('print','csv')),
+          class = 'cell-border stripe')
+```
+
+Finally, the words are randomly paired with one of the `r n_unique_targets` target responses.
+```{r episodic_pairs}
+episodic_pairs <- cbind(sample_frac(episodic_cues)["cue"],
+                        distinct(filtered_norms["response"]))
+```
+
+These random word pairs are shown in the table below.
+```{r show_episodic_pairs, echo=FALSE}
+datatable(episodic_pairs,
+          extensions = 'Buttons',
+          options = list(pageLength = nrow(filtered_norms),
+                         lengthMenu = c(25, 50, 100, 200, nrow(episodic_pairs)),
+                         dom = 'Bfrtip',
+                         buttons = c('print','csv')),
+          class = 'cell-border stripe')
+```
+
+```{r, eval=FALSE, include=FALSE}
+a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv") %>%
+  rename(word=Word, length=Length) %>%
+  filter(!grepl("^[[:upper:]]+", word),
+         grepl("^NN$", POS)) %>%
+  anti_join(filtered_norms, by = c("word"="cue")) %>%
+  anti_join(filtered_norms, by = c("word"="response"))
+
+# Does a word end with "s"?
+words <- a$word
+ends_s <- str_sub(words, -1) == "s"
+# What singular form words also appear in plural form
+multiform <- unique(words[!ends_s][words[!ends_s] %in% str_sub(words[ends_s], 1, -2)])
+a <- a[!a$word %in% paste0(multiform,"s"),]
+```
