@@ -2,6 +2,8 @@
 title: "Selecting Stimuli from the USF Word Association Norms"
 author: "William Hopper"
 date: "October 20, 2016"
+header-includes:
+   - \usepackage{mathtools}
 output: 
   html_document:
     code_folding: hide
@@ -346,6 +348,7 @@ remove_responses <- c("angry", "build", "choose", "fishing", "honesty",
 filtered_norms <- filtered_norms[!filtered_norms$response %in% remove_responses, ]
 
 n_unique_targets <- length(unique(filtered_norms$response))
+n_usable_targets <- n_unique_targets - (n_unique_targets %% 3)
 ```
 
 ## The Final Stimuli Set
@@ -362,6 +365,8 @@ The procedure outlined above yields a set of semantically associated word pairs 
 8. Those cues have the strongest possible forward associates to their targets, given the above constraints
 
 - Number of unique target responses: <b> `r n_unique_targets` </b>
+
+Assuming that there are 3 experimental conditions (Restudy, Test Practice, and Control), and stimuli are divided evenly between these 3 conditions, then the maximum number of target responses yielded by this set is <b> `r n_usable_targets` </b> and  <b> `r n_usable_targets/3` </b> trials per condition.
 
 ```{r association_stregnth_distribution, echo=FALSE, fig.width=10}
 par(mfrow = c(1,2))
@@ -438,6 +443,35 @@ datatable(episodic_pairs,
                          buttons = c('print','csv')),
           class = 'cell-border stripe')
 ```
+
+## Expected Experiment Duration
+
+Assuming that:
+
+- There are 3 experimental conditions (Restudy, Test Practice, and Control), and stimuli are divided evenly between these 3 conditions
+- Study and Restudy trial duration is 2.5 seconds
+- There is a .5 second I.S.I. between trials
+- Test trials take an average of 6 seconds to complete
+- There are 3 rounds of practice for each target
+
+then the expected duration of the experiment, in seconds, is:
+
+```{r duration, echo=FALSE}
+duration <- (336*(2.5 + .5)) + ((336/3)*(2.5 + .5)*3) + ((336/3)*6*3) + (336*6)
+```
+
+$$
+\underbrace{(336 \times (2.5 + .5))}_\text{Study} + 
+\underbrace{(\frac{336}{3} \times  (2.5 + .5) \times 3)}_\text{Restudy} + 
+\underbrace{(\frac{336}{3} \times 6 \times 3)}_\text{Test Practice} +
+\underbrace{(336 \times 6)}_\text{Final Test} = `r duration`
+$$
+
+Converted to minutes, the expected duration is
+
+$$
+\frac{ `r duration` }{60} = `r duration/60`\: \text{minutes}
+$$
 
 ```{r, eval=FALSE, include=FALSE}
 a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv") %>%
