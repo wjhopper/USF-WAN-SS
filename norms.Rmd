@@ -58,7 +58,7 @@ After reading in the data, transform the character columns ("*cue*" and "*repons
 Then, filter out any cue/response words with non alphabetical characters
 
 ```{r reading_data}
-norms <- read.csv("~/Documents/Stimuli/norms.csv",
+norms <- read.csv("norms.csv",
                   header = FALSE,
                   col.names = c("cue", "response", "forward_association", "backwards_association")) %>%
   mutate_if(.predicate = is.character, .funs = tolower) %>% 
