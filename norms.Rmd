@@ -430,6 +430,7 @@ datatable(episodic_cues,
 
 Finally, the words are randomly paired with one of the `r n_unique_targets` target responses.
 ```{r episodic_pairs}
+set.seed(100)
 episodic_pairs <- cbind(sample_frac(episodic_cues)["cue"],
                         distinct(filtered_norms["response"]))
 ```
