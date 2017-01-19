@@ -37,8 +37,8 @@ tr.odd {
 
 </style>
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#### Libraries Used
+```{r libraries, warning=FALSE, message=FALSE}
 library(DT)
 library(dplyr)
 library(stringr)
@@ -60,7 +60,8 @@ Then, filter out any cue/response words with non alphabetical characters
 ```{r reading_data}
 norms <- read.csv("norms.csv",
                   header = FALSE,
-                  col.names = c("cue", "response", "forward_association", "backwards_association")) %>%
+                  col.names = c("cue", "response", "forward_association", "backwards_association"),
+                  stringsAsFactors = FALSE) %>%
   mutate_if(.predicate = is.character, .funs = tolower) %>% 
   filter(grepl("^[a-z]+$", response) & grepl("^[a-z]+$", cue))
 
@@ -79,7 +80,8 @@ the unique words in the USF norms. Clean up the query results by removing the "O
 
 WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
                header = TRUE,
-               na.strings = "NULL") %>%
+               na.strings = "NULL",
+               stringsAsFactors = FALSE) %>%
   select(-Occurences) %>%
   rename(word = Word, length = Length) %>%
   filter((length >= 4 & length <= 10) & (SUBTLWF >= 5 & SUBTLWF <= 200))
@@ -96,7 +98,7 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 ```{r strongest_cues}
 
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
-  filter(forward_association > .1) %>%
+  filter(!cue %in% c("slave","president"), forward_association > .1) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   group_by(cue) %>%
@@ -105,8 +107,7 @@ filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   top_n(5, forward_association) %>%
-  arrange(response, forward_association) %>%
-  filter(!cue %in% c("slave"))
+  arrange(response, desc(forward_association))
 
 ```
 
@@ -429,6 +430,7 @@ datatable(episodic_cues,
 
 Finally, the words are randomly paired with one of the `r n_unique_targets` target responses.
 ```{r episodic_pairs}
+set.seed(100)
 episodic_pairs <- cbind(sample_frac(episodic_cues)["cue"],
                         distinct(filtered_norms["response"]))
 ```
@@ -473,8 +475,26 @@ $$
 \frac{ `r duration` }{60} = `r duration/60`\: \text{minutes}
 $$
 
+```{r write_stimuli_table, include=FALSE}
+stimuli_table <- filtered_norms %>%
+  select(cue:forward_association) %>%
+  arrange(response, desc(forward_association)) %>%
+  group_by(response) %>%
+  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue)),
+              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
+              )
+     ) %>%
+  ungroup() %>%
+  left_join(episodic_pairs, by="response") %>%
+  rename(episodic_cue=cue)
+
+# write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
+```
+
+
 ```{r, eval=FALSE, include=FALSE}
-a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv") %>%
+a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv",
+              stringsAsFactors = FALSE) %>%
   rename(word=Word, length=Length) %>%
   filter(!grepl("^[[:upper:]]+", word),
          grepl("^NN$", POS)) %>%
