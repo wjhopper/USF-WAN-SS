@@ -60,7 +60,8 @@ Then, filter out any cue/response words with non alphabetical characters
 ```{r reading_data}
 norms <- read.csv("norms.csv",
                   header = FALSE,
-                  col.names = c("cue", "response", "forward_association", "backwards_association")) %>%
+                  col.names = c("cue", "response", "forward_association", "backwards_association"),
+                  stringsAsFactors = FALSE) %>%
   mutate_if(.predicate = is.character, .funs = tolower) %>% 
   filter(grepl("^[a-z]+$", response) & grepl("^[a-z]+$", cue))
 
@@ -79,7 +80,8 @@ the unique words in the USF norms. Clean up the query results by removing the "O
 
 WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
                header = TRUE,
-               na.strings = "NULL") %>%
+               na.strings = "NULL",
+               stringsAsFactors = FALSE) %>%
   select(-Occurences) %>%
   rename(word = Word, length = Length) %>%
   filter((length >= 4 & length <= 10) & (SUBTLWF >= 5 & SUBTLWF <= 200))
@@ -474,7 +476,8 @@ $$
 $$
 
 ```{r, eval=FALSE, include=FALSE}
-a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv") %>%
+a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv",
+              stringsAsFactors = FALSE) %>%
   rename(word=Word, length=Length) %>%
   filter(!grepl("^[[:upper:]]+", word),
          grepl("^NN$", POS)) %>%
