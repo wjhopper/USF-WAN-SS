@@ -98,7 +98,7 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 ```{r strongest_cues}
 
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
-  filter(forward_association > .1) %>%
+  filter(!cue %in% c("slave","president"), forward_association > .1) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   group_by(cue) %>%
