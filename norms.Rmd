@@ -107,8 +107,7 @@ filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   top_n(5, forward_association) %>%
-  arrange(response, forward_association) %>%
-  filter(!cue %in% c("slave"))
+  arrange(response, desc(forward_association))
 
 ```
 
