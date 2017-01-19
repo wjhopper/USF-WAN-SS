@@ -475,6 +475,23 @@ $$
 \frac{ `r duration` }{60} = `r duration/60`\: \text{minutes}
 $$
 
+```{r write_stimuli_table, include=FALSE}
+stimuli_table <- filtered_norms %>%
+  select(cue:forward_association) %>%
+  arrange(response, desc(forward_association)) %>%
+  group_by(response) %>%
+  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue)),
+              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
+              )
+     ) %>%
+  ungroup() %>%
+  left_join(episodic_pairs, by="response") %>%
+  rename(episodic_cue=cue)
+
+# write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
+```
+
+
 ```{r, eval=FALSE, include=FALSE}
 a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv",
               stringsAsFactors = FALSE) %>%
