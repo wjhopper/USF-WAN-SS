@@ -37,8 +37,8 @@ tr.odd {
 
 </style>
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#### Libraries Used
+```{r libraries, warning=FALSE, message=FALSE}
 library(DT)
 library(dplyr)
 library(stringr)
