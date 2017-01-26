@@ -98,7 +98,9 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 ```{r strongest_cues}
 
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
-  filter(!cue %in% c("slave","president"), forward_association > .1) %>%
+  filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
+         !response %in% c("airplane", "devil", "cloth","slave"),
+         forward_association > .1) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   group_by(cue) %>%
@@ -405,6 +407,8 @@ targets_and_semantic_cues <- c(filtered_norms$cue, filtered_norms$response)
 episodic_cues <- norms %>%
   filter(!(cue %in% targets_and_semantic_cues | response %in% targets_and_semantic_cues)) %>%
   filter(!cue %in% paste0(find_suffixed(cue,"s"),"s")) %>%
+  filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
+         !response %in% c("slave","president", "airplane", "devil", "cloth")) %>%
   inner_join(WF, by = c("cue"="word")) %>%
   filter(grepl("^NN$", POS)) %>%
   group_by(cue) %>%
