@@ -494,21 +494,3 @@ stimuli_table <- filtered_norms %>%
 
 # write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
 ```
-
-
-```{r, eval=FALSE, include=FALSE}
-a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv",
-              stringsAsFactors = FALSE) %>%
-  rename(word=Word, length=Length) %>%
-  filter(!grepl("^[[:upper:]]+", word),
-         grepl("^NN$", POS)) %>%
-  anti_join(filtered_norms, by = c("word"="cue")) %>%
-  anti_join(filtered_norms, by = c("word"="response"))
-
-# Does a word end with "s"?
-words <- a$word
-ends_s <- str_sub(words, -1) == "s"
-# What singular form words also appear in plural form
-multiform <- unique(words[!ends_s][words[!ends_s] %in% str_sub(words[ends_s], 1, -2)])
-a <- a[!a$word %in% paste0(multiform,"s"),]
-```
