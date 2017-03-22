@@ -354,8 +354,7 @@ n_unique_targets <- length(unique(filtered_norms$response))
 n_usable_targets <- n_unique_targets - (n_unique_targets %% 3)
 ```
 
-## The Final Stimuli Set
-
+## The Semantically Associated Stimuli
 The procedure outlined above yields a set of semantically associated word pairs where:
 
 1. All response words have a word frequency between `r min(filtered_norms$SUBTLWF)` and `r max(filtered_norms$SUBTLWF)` uses per million words
@@ -379,7 +378,7 @@ hist(filtered_norms$SUBTLWF, main = "Target Word Frequency Distribution",
      xlab = "SUBTLX Word Frequency", breaks = 20)
 ```
 
-#### The Semantically Associated Stimulus Set
+
 ```{r show_filtered_stimulus_set, echo=FALSE}
 datatable(filtered_norms,
           extensions = 'Buttons',
@@ -432,19 +431,34 @@ datatable(episodic_cues,
           class = 'cell-border stripe')
 ```
 
+
+## The Final Stimulus Set
 Finally, the words are randomly paired with one of the `r n_unique_targets` target responses.
 ```{r episodic_pairs}
 set.seed(100)
 episodic_pairs <- cbind(sample_frac(episodic_cues)["cue"],
                         distinct(filtered_norms["response"]))
+
+stimuli_table <- filtered_norms %>%
+  select(cue:forward_association) %>%
+  arrange(response, desc(forward_association)) %>%
+  group_by(response) %>%
+  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue),
+                         stringsAsFactors = FALSE),
+              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
+              )
+     ) %>%
+  ungroup() %>%
+  left_join(episodic_pairs, by="response") %>%
+  rename(episodic_cue = cue)
 ```
 
-These random word pairs are shown in the table below.
+The episodic and semantic cues selected for each target word are shown in the table below
 ```{r show_episodic_pairs, echo=FALSE}
-datatable(episodic_pairs,
+datatable(stimuli_table,
           extensions = 'Buttons',
-          options = list(pageLength = nrow(filtered_norms),
-                         lengthMenu = c(25, 50, 100, 200, nrow(episodic_pairs)),
+          options = list(pageLength = nrow(stimuli_table),
+                         lengthMenu = c(25, 50, 100, 200, nrow(stimuli_table)),
                          dom = 'Bfrtip',
                          buttons = c('print','csv')),
           class = 'cell-border stripe')
@@ -480,17 +494,5 @@ $$
 $$
 
 ```{r write_stimuli_table, include=FALSE}
-stimuli_table <- filtered_norms %>%
-  select(cue:forward_association) %>%
-  arrange(response, desc(forward_association)) %>%
-  group_by(response) %>%
-  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue)),
-              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
-              )
-     ) %>%
-  ungroup() %>%
-  left_join(episodic_pairs, by="response") %>%
-  rename(episodic_cue=cue)
-
 # write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
 ```
