@@ -8,6 +8,17 @@ output:
   html_document:
     code_folding: hide
     toc: true
+params:
+  n_cue:
+    input: numeric
+    value: 1
+    label: "Number of Cues per Target Word"
+  min_strength:
+    input: numeric
+    value: 0.2
+    min: 0
+    max: 1
+    label: "Minimum Forward Associative Strength"
 ---
 <style>
 
@@ -96,25 +107,33 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 4. For each unique response, select the top 5 cue words (i.e., keep the top 5 forward associates to each response).
 
 ```{r strongest_cues}
-
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
   filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
          !response %in% c("airplane", "devil", "cloth","slave"),
-         forward_association > .1) %>%
+         forward_association >= params$min_strength) %>%
   group_by(response) %>%
-  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
+  filter(n() >= params$n_cue) %>% # Only keep responses with at least N cues leading to them
   group_by(cue) %>%
   top_n(1, forward_association) %>% # Select the strongest associate to each cue
   slice(1) %>% # gets rid of possible ties from top_n
-  group_by(response) %>%
-  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
-  top_n(5, forward_association) %>%
+  ungroup()
+
+if (params$n_cue > 1L) {
+  # Only keep responses with at least N cues leading to them
+  # We have to do this again because selecting only top associate to each cue
+  # could have moved some targets below N cues.
+  filtered_norms <- group_by(filtered_norms, response) %>%
+  filter(n() >= params$n_cue) %>%
+  ungroup() %>%
   arrange(response, desc(forward_association))
 
+} else {
+  filtered_norms <- arrange(filtered_norms, desc(forward_association))
+}
 ```
 
-```{r, echo=FALSE}
-# Sanity Checks 
+```{r sanity1, echo=FALSE}
+# Sanity Checks
 # Make sure the number of unique cues equals the number of rows in the table
 # This is a check to make sure all the cue words are unique
 stopifnot(length(unique(filtered_norms$cue)) == nrow(filtered_norms))
@@ -258,7 +277,7 @@ remove_plurals <- function(data, variable) {
 filtered_norms <- filtered_norms %>%
   remove_plurals("cue") %>%
   group_by(response) %>%
-  filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
+  filter(n() >= params$n_cue) %>% # Only keep responses with at least 3 cues leading to them
   ungroup() %>%
   remove_plurals("response")
 
@@ -338,8 +357,8 @@ Select the top 3 cues to each associate to finalize the stimuli set.
 ```{r top_n_cues}
 filtered_norms <- filtered_norms %>%
   group_by(response) %>%
-  top_n(3, forward_association) %>%
-  slice(1:3) %>%
+  top_n(params$n_cue, forward_association) %>%
+  slice(1:params$n_cue) %>% # to break ties from top_n
   ungroup()
 ```
 
