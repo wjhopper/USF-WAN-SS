@@ -19,6 +19,11 @@ params:
     min: 0
     max: 1
     label: "Minimum Forward Associative Strength"
+  WSconditions:
+    input: numeric
+    value: 5
+    min: 1
+    label: "Number of Within-subject conditions"
 ---
 <style>
 
@@ -107,6 +112,7 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 4. For each unique response, select the top 5 cue words (i.e., keep the top 5 forward associates to each response).
 
 ```{r strongest_cues}
+
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
   filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
          !response %in% c("airplane", "devil", "cloth","slave"),
@@ -370,7 +376,7 @@ remove_responses <- c("angry", "build", "choose", "fishing", "honesty",
 filtered_norms <- filtered_norms[!filtered_norms$response %in% remove_responses, ]
 
 n_unique_targets <- length(unique(filtered_norms$response))
-n_usable_targets <- n_unique_targets - (n_unique_targets %% 3)
+n_usable_targets <- n_unique_targets - (n_unique_targets %% params$WSconditions)
 ```
 
 ## The Semantically Associated Stimuli
