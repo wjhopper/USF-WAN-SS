@@ -117,10 +117,9 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 ## Filtering the Word Association Norms
 
 #### Selecting the strongest cues
-1. Join the norms and word frequency data together, keeping only cue-response pairs where the response words meet the length and WF constraints. 
-2. Only include responses which have at least 3 cues with forward associations of at least .1
+1. Join the norms and word frequency data together, keeping only cue-response pairs where the response words meet the length and word frequency constraints.
+2. Only include responses which have at least `r params$n_cue` cue(s) with forward associations of at least `r params$min_strength`
 3. For each unique cue word, select the response with the highest forward association.
-4. For each unique response, select the top 5 cue words (i.e., keep the top 5 forward associates to each response).
 
 ```{r strongest_cues}
 
@@ -370,7 +369,7 @@ if (length(all_multiform) != 0) {
 
 #### Top *N* Cues
 
-Select the top 3 cues to each associate to finalize the stimuli set.
+Select the top `r params$n_cue` cues to each associate to finalize the stimuli set.
 ```{r top_n_cues}
 filtered_norms <- filtered_norms %>%
   group_by(response) %>%
@@ -400,16 +399,16 @@ The procedure outlined above yields a set of semantically associated word pairs 
 
 1. All response words have a word frequency between `r min(filtered_norms$SUBTLWF)` and `r max(filtered_norms$SUBTLWF)` uses per million words
 2. All response words are between `r min(filtered_norms$length)` and `r max(filtered_norms$length)` letters long
-3. Each cue has a minimum forward association of 0.1.
+3. Each cue has a minimum forward association of `r params$min_strength`.
 4. Each cue word is unique (i.e., each cue appears with only 1 target response)
 5. No cue words are also target words, and vice versa (i.e., there is no intersection between cues and responses)
 6. Words use either their plural and singular form, never both
-7. There are at least 3 cues for each response
+7. There are at least `r params$n_cue` cues for each response
 8. Those cues have the strongest possible forward associates to their targets, given the above constraints
 
 - Number of unique target responses: <b> `r n_unique_targets` </b>
 
-Assuming that there are 3 experimental conditions (Restudy, Test Practice, and Control), and stimuli are divided evenly between these 3 conditions, then the maximum number of target responses yielded by this set is <b> `r n_usable_targets` </b> and  <b> `r n_usable_targets/3` </b> trials per condition.
+Assuming that there are `r params$WSconditions` experimental conditions, and stimuli are divided evenly between these conditions, then the maximum number of trials per condition is <b> `r n_usable_targets/params$WSconditions` </b> .
 
 ```{r association_stregnth_distribution, echo=FALSE, fig.width=10}
 par(mfrow = c(1,2))
