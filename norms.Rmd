@@ -437,14 +437,13 @@ episodic_cues <- norms %>%
   filter(!cue %in% c("president", banned),
          !response %in% banned) %>%
   inner_join(WF, by = c("cue"="word")) %>%
-  filter(grepl("^NN$", POS)) %>%
+  filter(grepl("^NN", POS)) %>%
   group_by(cue) %>%
   top_n(-1,forward_association) %>%
   slice(1) %>%
   ungroup() %>%
   arrange(forward_association) %>%
   slice(1:n_unique_targets)
-
 ```
 
 The words selected for use as episodic cues and their properties are shown below.
