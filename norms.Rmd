@@ -491,35 +491,6 @@ datatable(stimuli_table,
           class = 'cell-border stripe')
 ```
 
-## Expected Experiment Duration
-
-Assuming that:
-
-- There are 3 experimental conditions (Restudy, Test Practice, and Control), and stimuli are divided evenly between these 3 conditions
-- Study and Restudy trial duration is 2.5 seconds
-- There is a .5 second I.S.I. between trials
-- Test trials take an average of 6 seconds to complete
-- There are 3 rounds of practice for each target
-
-then the expected duration of the experiment, in seconds, is:
-
-```{r duration, echo=FALSE}
-duration <- (336*(2.5 + .5)) + ((336/3)*(2.5 + .5)*3) + ((336/3)*6*3) + (336*6)
-```
-
-$$
-\underbrace{(336 \times (2.5 + .5))}_\text{Study} + 
-\underbrace{(\frac{336}{3} \times  (2.5 + .5) \times 3)}_\text{Restudy} + 
-\underbrace{(\frac{336}{3} \times 6 \times 3)}_\text{Test Practice} +
-\underbrace{(336 \times 6)}_\text{Final Test} = `r duration`
-$$
-
-Converted to minutes, the expected duration is
-
-$$
-\frac{ `r duration` }{60} = `r duration/60`\: \text{minutes}
-$$
-
 ```{r write_stimuli_table, include=FALSE}
 # write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
 ```
