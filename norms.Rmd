@@ -98,7 +98,9 @@ WF <- read.csv("WordAssociationNorms_SUBTLEXFrequencies.csv",
 ```{r strongest_cues}
 
 filtered_norms <- inner_join(norms, WF, by = c("response"="word")) %>%
-  filter(!cue %in% c("slave","president"), forward_association > .1) %>%
+  filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
+         !response %in% c("airplane", "devil", "cloth","slave"),
+         forward_association > .1) %>%
   group_by(response) %>%
   filter(n() >= 3) %>% # Only keep responses with at least 3 cues leading to them
   group_by(cue) %>%
@@ -352,8 +354,7 @@ n_unique_targets <- length(unique(filtered_norms$response))
 n_usable_targets <- n_unique_targets - (n_unique_targets %% 3)
 ```
 
-## The Final Stimuli Set
-
+## The Semantically Associated Stimuli
 The procedure outlined above yields a set of semantically associated word pairs where:
 
 1. All response words have a word frequency between `r min(filtered_norms$SUBTLWF)` and `r max(filtered_norms$SUBTLWF)` uses per million words
@@ -377,7 +378,7 @@ hist(filtered_norms$SUBTLWF, main = "Target Word Frequency Distribution",
      xlab = "SUBTLX Word Frequency", breaks = 20)
 ```
 
-#### The Semantically Associated Stimulus Set
+
 ```{r show_filtered_stimulus_set, echo=FALSE}
 datatable(filtered_norms,
           extensions = 'Buttons',
@@ -405,6 +406,8 @@ targets_and_semantic_cues <- c(filtered_norms$cue, filtered_norms$response)
 episodic_cues <- norms %>%
   filter(!(cue %in% targets_and_semantic_cues | response %in% targets_and_semantic_cues)) %>%
   filter(!cue %in% paste0(find_suffixed(cue,"s"),"s")) %>%
+  filter(!cue %in% c("slave","president", "airplane", "devil", "cloth"),
+         !response %in% c("slave","president", "airplane", "devil", "cloth")) %>%
   inner_join(WF, by = c("cue"="word")) %>%
   filter(grepl("^NN$", POS)) %>%
   group_by(cue) %>%
@@ -428,19 +431,34 @@ datatable(episodic_cues,
           class = 'cell-border stripe')
 ```
 
+
+## The Final Stimulus Set
 Finally, the words are randomly paired with one of the `r n_unique_targets` target responses.
 ```{r episodic_pairs}
 set.seed(100)
 episodic_pairs <- cbind(sample_frac(episodic_cues)["cue"],
                         distinct(filtered_norms["response"]))
+
+stimuli_table <- filtered_norms %>%
+  select(cue:forward_association) %>%
+  arrange(response, desc(forward_association)) %>%
+  group_by(response) %>%
+  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue),
+                         stringsAsFactors = FALSE),
+              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
+              )
+     ) %>%
+  ungroup() %>%
+  left_join(episodic_pairs, by="response") %>%
+  rename(episodic_cue = cue)
 ```
 
-These random word pairs are shown in the table below.
+The episodic and semantic cues selected for each target word are shown in the table below
 ```{r show_episodic_pairs, echo=FALSE}
-datatable(episodic_pairs,
+datatable(stimuli_table,
           extensions = 'Buttons',
-          options = list(pageLength = nrow(filtered_norms),
-                         lengthMenu = c(25, 50, 100, 200, nrow(episodic_pairs)),
+          options = list(pageLength = nrow(stimuli_table),
+                         lengthMenu = c(25, 50, 100, 200, nrow(stimuli_table)),
                          dom = 'Bfrtip',
                          buttons = c('print','csv')),
           class = 'cell-border stripe')
@@ -476,35 +494,5 @@ $$
 $$
 
 ```{r write_stimuli_table, include=FALSE}
-stimuli_table <- filtered_norms %>%
-  select(cue:forward_association) %>%
-  arrange(response, desc(forward_association)) %>%
-  group_by(response) %>%
-  do(setNames(data.frame(.[[1,"response"]], as.list(.$cue)),
-              c("response", paste("semantic_cue", 1:length(.$cue), sep="_"))
-              )
-     ) %>%
-  ungroup() %>%
-  left_join(episodic_pairs, by="response") %>%
-  rename(episodic_cue=cue)
-
 # write.csv(stimuli_table, "stimuli_table.csv", quote=FALSE, row.names=FALSE)
-```
-
-
-```{r, eval=FALSE, include=FALSE}
-a <- read.csv("Restricted_WordLength_SUBTLEXFrequencies.csv",
-              stringsAsFactors = FALSE) %>%
-  rename(word=Word, length=Length) %>%
-  filter(!grepl("^[[:upper:]]+", word),
-         grepl("^NN$", POS)) %>%
-  anti_join(filtered_norms, by = c("word"="cue")) %>%
-  anti_join(filtered_norms, by = c("word"="response"))
-
-# Does a word end with "s"?
-words <- a$word
-ends_s <- str_sub(words, -1) == "s"
-# What singular form words also appear in plural form
-multiform <- unique(words[!ends_s][words[!ends_s] %in% str_sub(words[ends_s], 1, -2)])
-a <- a[!a$word %in% paste0(multiform,"s"),]
 ```
