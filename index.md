@@ -1,4 +1,4 @@
 ---
 redirect_to:
-  - norms.html
+  - USF-WAN-SS/norms.html
 ---
